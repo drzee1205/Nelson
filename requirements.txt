@@ -1,0 +1,13 @@
+# MongoDB and Text Processing Requirements
+pymongo==4.6.1
+sentence-transformers==2.2.2
+numpy==1.24.3
+tqdm==4.66.1
+torch==2.1.2
+transformers==4.36.2
+scikit-learn==1.3.2
+
+# Optional: For better performance
+# accelerate==0.25.0
+# datasets==2.16.1
+
