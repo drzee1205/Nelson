@@ -20,7 +20,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Neon Database Configuration
-NEON_CONNECTION_STRING = "postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_CONNECTION_STRING = os.getenv(
+    'NEON_DATABASE_URL',
+    'postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+)
 
 def connect_to_neon():
     """Connect to Neon PostgreSQL database"""
@@ -480,4 +483,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

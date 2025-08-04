@@ -24,7 +24,10 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for web app integration
 
 # Neon Database Configuration
-NEON_CONNECTION_STRING = "postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_CONNECTION_STRING = os.getenv(
+    'NEON_DATABASE_URL',
+    'postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+)
 
 # Global database connection pool
 db_pool = None
@@ -480,4 +483,3 @@ if __name__ == '__main__':
         port=5000,
         debug=True
     )
-

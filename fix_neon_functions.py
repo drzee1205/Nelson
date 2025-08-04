@@ -5,6 +5,7 @@ Fix Neon PostgreSQL Functions
 This script fixes the data type issues in the PostgreSQL functions.
 """
 
+import os
 import psycopg2
 import logging
 
@@ -13,7 +14,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Neon Database Configuration
-NEON_CONNECTION_STRING = "postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_CONNECTION_STRING = os.getenv(
+    'NEON_DATABASE_URL',
+    'postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+)
 
 def fix_search_functions():
     """Fix the PostgreSQL search functions with correct data types"""
@@ -154,4 +158,3 @@ if __name__ == "__main__":
         print("\n✅ Functions fixed and tested successfully!")
     else:
         print("\n❌ Failed to fix functions")
-

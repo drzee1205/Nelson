@@ -280,10 +280,12 @@ public class MedicalEnhancementService {
 ### **Environment Variables**
 ```bash
 # .env file
-NEON_DATABASE_URL="postgresql://neondb_owner:npg_4TWsIBXtja9b@ep-delicate-credit-a1h2uxg9-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_DATABASE_URL="your_neon_connection_string_here"
 FLASK_ENV=production
 API_PORT=5000
 ```
+
+**Note**: Replace `your_neon_connection_string_here` with your actual Neon database connection string.
 
 ### **Docker Deployment**
 ```dockerfile
@@ -414,4 +416,3 @@ curl -X POST http://localhost:5000/search/topic/Digestive \
 - **Performance**: Optimized for production workloads
 
 **Ready to enhance your NelsonGPT with professional medical knowledge! 🏥⚡**
-
