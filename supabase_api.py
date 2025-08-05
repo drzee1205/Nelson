@@ -125,6 +125,8 @@ def search_medical_knowledge():
         query = data['query'].strip()
         top_k = data.get('top_k', 5)
         include_metadata = data.get('include_metadata', True)
+        min_page = data.get('min_page')
+        max_page = data.get('max_page')
         
         if not query:
             return jsonify({"error": "Query cannot be empty"}), 400
@@ -139,12 +141,19 @@ def search_medical_knowledge():
         
         # Search using Supabase text search
         try:
-            # Try full-text search first
-            result = supabase.table('nelson_textbook_chunks')\
-                .select('id, chapter_title, section_title, content, chunk_index, metadata, created_at')\
-                .text_search('content', query)\
-                .limit(top_k)\
-                .execute()
+            # Build query with optional page filtering
+            query_builder = supabase.table('nelson_textbook_chunks')\
+                .select('id, chapter_title, section_title, content, page_number, chunk_index, metadata, created_at')\
+                .text_search('content', query)
+            
+            # Add page range filtering if specified
+            if min_page is not None:
+                query_builder = query_builder.gte('page_number', min_page)
+            if max_page is not None:
+                query_builder = query_builder.lte('page_number', max_page)
+            
+            # Execute query
+            result = query_builder.limit(top_k).execute()
             
             search_results = result.data if result.data else []
             
@@ -205,6 +214,10 @@ def search_medical_knowledge():
             "query": query,
             "results_count": len(formatted_results),
             "results": formatted_results,
+            "page_filter": {
+                "min_page": min_page,
+                "max_page": max_page
+            } if min_page or max_page else None,
             "status": "success"
         })
         
@@ -472,6 +485,158 @@ def get_database_stats():
             "message": str(e)
         }), 500
 
+@app.route('/search/pages', methods=['POST'])
+def search_by_page_range():
+    """
+    Search medical content within specific page range
+    
+    Request body:
+    {
+        "query": "asthma treatment",
+        "min_page": 1100,
+        "max_page": 1200,
+        "top_k": 5
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'query' not in data:
+            return jsonify({
+                "error": "Missing 'query' in request body",
+                "example": {"query": "asthma", "min_page": 1100, "max_page": 1200}
+            }), 400
+        
+        query = data['query'].strip()
+        min_page = data.get('min_page', 1)
+        max_page = data.get('max_page', 3500)
+        top_k = data.get('top_k', 5)
+        
+        if not query:
+            return jsonify({"error": "Query cannot be empty"}), 400
+        
+        if top_k > 50:
+            top_k = 50
+        
+        supabase = get_supabase_client()
+        if not supabase:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        # Search with page range filtering
+        result = supabase.table('nelson_textbook_chunks')\
+            .select('id, chapter_title, section_title, content, page_number, chunk_index, created_at')\
+            .text_search('content', query)\
+            .gte('page_number', min_page)\
+            .lte('page_number', max_page)\
+            .not_.is_('page_number', 'null')\
+            .limit(top_k)\
+            .execute()
+        
+        search_results = result.data if result.data else []
+        
+        return jsonify({
+            "query": query,
+            "page_range": {"min_page": min_page, "max_page": max_page},
+            "results_count": len(search_results),
+            "results": search_results,
+            "status": "success"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Page search error: {e}")
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+@app.route('/page/<int:page_number>', methods=['GET'])
+def get_page_content(page_number):
+    """Get all content from a specific page"""
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        # Get content from specific page
+        result = supabase.table('nelson_textbook_chunks')\
+            .select('id, chapter_title, section_title, content, page_number, chunk_index, created_at')\
+            .eq('page_number', page_number)\
+            .order('chunk_index')\
+            .execute()
+        
+        page_content = result.data if result.data else []
+        
+        if not page_content:
+            return jsonify({
+                "page_number": page_number,
+                "content": [],
+                "message": "No content found for this page",
+                "status": "not_found"
+            }), 404
+        
+        return jsonify({
+            "page_number": page_number,
+            "content_count": len(page_content),
+            "content": page_content,
+            "status": "success"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Page content error: {e}")
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+@app.route('/chapters/<chapter_name>/pages', methods=['GET'])
+def get_chapter_page_range(chapter_name):
+    """Get page range for a specific medical chapter"""
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        # Normalize chapter name
+        chapter_search = chapter_name.replace('-', ' ').replace('_', ' ')
+        
+        # Get page range for chapter
+        result = supabase.table('nelson_textbook_chunks')\
+            .select('page_number')\
+            .ilike('chapter_title', f'%{chapter_search}%')\
+            .not_.is_('page_number', 'null')\
+            .execute()
+        
+        if not result.data:
+            return jsonify({
+                "chapter": chapter_name,
+                "page_range": None,
+                "message": "Chapter not found or no page numbers available",
+                "status": "not_found"
+            }), 404
+        
+        # Calculate page range
+        page_numbers = [record['page_number'] for record in result.data]
+        min_page = min(page_numbers)
+        max_page = max(page_numbers)
+        
+        return jsonify({
+            "chapter": chapter_name,
+            "page_range": {
+                "min_page": min_page,
+                "max_page": max_page,
+                "total_pages": max_page - min_page + 1
+            },
+            "document_count": len(result.data),
+            "status": "success"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Chapter page range error: {e}")
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({
@@ -481,6 +646,9 @@ def not_found(error):
             "POST /search", 
             "GET /search/chapters",
             "POST /search/chapter/<chapter_name>",
+            "POST /search/pages",
+            "GET /page/<page_number>",
+            "GET /chapters/<chapter_name>/pages",
             "POST /search/vector",
             "GET /stats"
         ]
@@ -506,16 +674,24 @@ if __name__ == '__main__':
     print("🌐 Starting API server...")
     print("\n📋 Available endpoints:")
     print("  • GET  /health - Health check")
-    print("  • POST /search - Search medical knowledge")
+    print("  • POST /search - Search medical knowledge (with optional page filtering)")
     print("  • GET  /search/chapters - Get available chapters")
     print("  • POST /search/chapter/<chapter> - Search by chapter")
+    print("  • POST /search/pages - Search within page range")
+    print("  • GET  /page/<page_number> - Get content from specific page")
+    print("  • GET  /chapters/<chapter>/pages - Get page range for chapter")
     print("  • POST /search/vector - Vector similarity search")
     print("  • GET  /stats - Database statistics")
     
     print("\n💡 Example usage:")
+    print("# Basic search:")
     print("curl -X POST http://localhost:5000/search \\")
     print("  -H 'Content-Type: application/json' \\")
     print("  -d '{\"query\": \"asthma treatment\", \"top_k\": 3}'")
+    print("\n# Page-based search:")
+    print("curl -X POST http://localhost:5000/search/pages \\")
+    print("  -H 'Content-Type: application/json' \\")
+    print("  -d '{\"query\": \"asthma\", \"min_page\": 1100, \"max_page\": 1200}'")
     
     print("\n🚀 Server starting on http://localhost:5000")
     print("🌐 Connected to Supabase PostgreSQL")
@@ -527,4 +703,3 @@ if __name__ == '__main__':
         port=5000,
         debug=True
     )
-
